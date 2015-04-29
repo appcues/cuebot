@@ -115,7 +115,7 @@ module.exports = (robot) ->
 
     if questions.length
       lastQ = _.last questions
-      res.reply "Ahem, you still have #{questions.length} left. The last one was, \"#{lastQ.question}\" How would you like to respond?"
+      res.reply "Ahem, you still have #{questions.length} left. The next one is, \"#{lastQ.question}\" How would you like to respond?"
 
   # Opt out of the last question asked.
   robot.respond /pass/i, (res) ->
