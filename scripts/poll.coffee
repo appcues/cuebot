@@ -61,7 +61,7 @@ module.exports = (robot) ->
 
       # Expired.
       timers.push setTimeout ->
-          deferred.reject(new Error('Question expired'))
+          deferred.reject(new Error("#{username} didn't respond to your question in time."))
         , QUESTION_EXPIRY
 
       # Clear the timers if successfully answered.
@@ -69,8 +69,8 @@ module.exports = (robot) ->
         _.each timers, (tid) -> clearTimeout tid
 
       # Notify creator when someone failed to respond in time.
-      deferred.promise.catch ->
-        robot.messageRoom user.name, "#{username} didn't respond to your question in time."
+      deferred.promise.catch (e) ->
+        robot.messageRoom user.name, e.message
 
       # Always remove the question from the lineup.
       deferred.promise.finally ->
@@ -85,7 +85,8 @@ module.exports = (robot) ->
         createdBy: user
         _promise: deferred
       }
-      robot.messageRoom username, question
+
+      robot.messageRoom username, question + '_("answer <message>" or "pass")_'
 
     res.reply "Just asked them. I'll keep you posted."
 
@@ -99,18 +100,37 @@ module.exports = (robot) ->
 
     # Answer the last question asked of us.
     question = questions.pop()
-    author = question.createdBy
 
     # No questions!
     unless question
       res.reply "You haven't been asked any questions recently."
       return
 
+    author = question.createdBy
     res.reply "Great, I'll let #{author.real_name} know."
     robot.messageRoom author.name, "#{user.real_name} responded, \"#{answer}\""
 
     # Resolve the promise now that the question has been answered.
     question._promise.resolve()
+
+    if questions.length
+      lastQ = _.last questions
+      res.reply "Ahem, you still have #{questions.length} left. The last one was, \"#{lastQ.question}\" How would you like to respond?"
+
+  # Opt out of the last question asked.
+  robot.respond /pass/i, (res) ->
+    answer = res.match[1]
+    user = res.envelope.user
+
+    # Get the last question.
+    questions = questionsByUser[user.name] ? []
+    question = questions.pop()
+
+    if question
+      author = question.createdBy
+      res.reply "OK, I'll cover for you and tell #{author.real_name} you're feeling sick or something."
+      e = new Error("#{user.name} opted out.")
+      question._promise.reject e
 
     if questions.length
       lastQ = _.last questions
