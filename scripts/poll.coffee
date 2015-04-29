@@ -6,6 +6,7 @@ QUESTION_EXPIRY = 30*60*1000
 
 
 module.exports = (robot) ->
+  debug 'Poll script loaded'
 
   recipientsRe = /(?:@([^\s]+))/g
   questionRe = /\@[^\s]+\s(?=[^@]*$)(.*)/
@@ -19,6 +20,7 @@ module.exports = (robot) ->
     msg = res.match[1]
     id = _.uniqueId 'question'
     user = res.envelope.user
+    users = robot.adapter.client.users
     recipients = msg.match(recipientsRe)
     question = msg.match(questionRe)[1]
 
@@ -36,8 +38,15 @@ module.exports = (robot) ->
       debug "[#{id}] Invalid: question lacked a question mark."
       return
 
+    # Support @everyone.
+    if '@everyone' in recipients
+      recipients = []
+      _.each users, (u) ->
+        unless u.deleted or u.is_bot or u.id in [user.id, 'USLACKBOT']
+          recipients.push u.name
+
     # Message recipients individually.
-    debug "[#{id}] Notifying #{recipients.length} recipients."
+    debug "[#{id}] Notifying #{recipients.length} recipients.", recipients
     for recipient in recipients
       username = recipient.replace(/^@/, '')
       # Create a promise so we track when this question is answered.
