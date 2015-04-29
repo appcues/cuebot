@@ -1,5 +1,8 @@
 RSVP = require 'rsvp'
 _ = require 'underscore'
+debug = require('debug')('cuebot:poll')
+
+QUESTION_EXPIRY = 30*60*1000
 
 
 module.exports = (robot) ->
@@ -19,29 +22,42 @@ module.exports = (robot) ->
     recipients = msg.match(recipientsRe)
     question = msg.match(questionRe)[1]
 
+    debug "[#{id}] Question asked."
+
     # You must mention recipients.
     unless recipients?.length
       res.reply 'Who am I supposed to ask?'
+      debug "[#{id}] Invalid: question lacked recipients."
       return
 
     # Questions should end with a question mark because grammar.
     unless /\?$/.test(question)
       res.reply "That doesn't sound like a question."
+      debug "[#{id}] Invalid: question lacked a question mark."
       return
 
     # Message recipients individually.
+    debug "[#{id}] Notifying #{recipients.length} recipients."
     for recipient in recipients
       username = recipient.replace(/^@/, '')
       # Create a promise so we track when this question is answered.
       # Leave it open for a maximum of 30 minutes.
       deferred = RSVP.defer()
-      timeoutId = setTimeout ->
-        deferred.reject(new Error('Question expired'))
-      , 30*60*1000
+      timers = []
 
-      # Clear the timeout if successfully answered.
+      # 5 minute warning.
+      timers.push setTimeout ->
+          robot.messageRoom username, "Time is running out to answer, \"#{question}\" Whaddya say?"
+        , QUESTION_EXPIRY - 5*60*1000
+
+      # Expired.
+      timers.push setTimeout ->
+          deferred.reject(new Error('Question expired'))
+        , QUESTION_EXPIRY
+
+      # Clear the timers if successfully answered.
       deferred.promise.then ->
-        clearTimeout timeoutId
+        _.each timers, (tid) -> clearTimeout tid
 
       # Notify creator when someone failed to respond in time.
       deferred.promise.catch ->
